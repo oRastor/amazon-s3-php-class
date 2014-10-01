@@ -1150,16 +1150,30 @@ class S3
 	* @param integer $lifetime Lifetime in seconds
 	* @param boolean $hostBucket Use the bucket name as the hostname
 	* @param boolean $https Use HTTPS ($hostBucket should be false for SSL verification)
+	* @param array $queryParams query params to build result header
 	* @return string
 	*/
-	public static function getAuthenticatedURL($bucket, $uri, $lifetime, $hostBucket = false, $https = false)
-	{
+	public static function getAuthenticatedURL($bucket, $uri, $lifetime, $hostBucket = false, $https = false, $queryParams = array()) {
 		$expires = self::__getTime() + $lifetime;
 		$uri = str_replace(array('%2F', '%2B'), array('/', '+'), rawurlencode($uri));
-		return sprintf(($https ? 'https' : 'http').'://%s/%s?AWSAccessKeyId=%s&Expires=%u&Signature=%s',
-		// $hostBucket ? $bucket : $bucket.'.s3.amazonaws.com', $uri, self::$__accessKey, $expires,
-		$hostBucket ? $bucket : self::$endpoint.'/'.$bucket, $uri, self::$__accessKey, $expires,
-		urlencode(self::__getHash("GET\n\n\n{$expires}\n/{$bucket}/{$uri}")));
+		
+		if (count($queryParams)) {
+		    $signUri = array();
+		    foreach ($queryParams as $key => $value) {
+		        $signUri[] = $key . '=' . $value;
+		    }
+		    $signUri = $uri . '?' . implode('&', $signUri);
+		} else {
+		    $signUri = $uri;
+		}
+		
+		$uri = $uri . '?' . http_build_query(array_merge($queryParams, array(
+		            'AWSAccessKeyId' => self::$__accessKey,
+		            'Expires'        => $expires,
+		            'Signature'      => self::__getHash("GET\n\n\n{$expires}\n/{$bucket}/{$signUri}")
+		       )));
+		
+		return sprintf(($https ? 'https' : 'http') . '://%s/%s', $hostBucket ? $bucket : self::$endpoint . '/' . $bucket, $uri);
 	}
 
 
